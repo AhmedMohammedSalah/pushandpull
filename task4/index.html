@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Long Polling Demo</title>
+</head>
+<body>
+    <h2>Live File Content Monitor</h2>
+    <div id="fileContent">Waiting for updates...</div>
+    <button onclick="startPolling()">Start Monitoring</button>
+    <button onclick="stopPolling()">Stop Monitoring</button>
+
+    <script>
+        let polling = false;
+        let lastModified = 0;
+        function startPolling() {
+            if (polling) return;
+            polling = true;
+            pollForUpdates();
+        }
+        
+        function stopPolling() {
+            polling = false;
+        }
+        
+        function pollForUpdates() {
+            if (!polling) return;
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', `pollFile.php?lastModified=${lastModified}`, true);
+            xhr.onload = function() {
+                if (this.status === 200) {
+                    const response = JSON.parse(this.responseText);
+                    
+                    if (response.updated) {
+                        document.getElementById('fileContent').textContent = response.content;
+                        lastModified = response.lastModified;
+                    }
+                }
+                
+                // Immediately start next poll
+                pollForUpdates();
+            };
+            
+            xhr.onerror = function() {
+                // Retry after a delay
+                setTimeout(pollForUpdates, 2000);
+            };
+            
+            xhr.send();
+        }
+    </script>
+</body>
+</html>

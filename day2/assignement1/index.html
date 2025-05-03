@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>SSE Notification System</title>
+    <style>
+      #notifications {
+        font-family: Arial, sans-serif;
+        max-width: 600px;
+        margin: 20px auto;
+        border: 1px solid #ddd;
+        padding: 20px;
+        border-radius: 5px;
+      }
+      .notification {
+        padding: 10px;
+        margin: 5px 0;
+        background-color: #f8f8f8;
+        border-left: 4px solid #4caf50;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="notifications">
+        <h2>Live Notifications</h2>
+        <div id="notification-container"></div>
+    </div>
+
+    <script>
+        const eventSource = new EventSource("sse_server.php");
+        const container = document.getElementById("notification-container");
+
+        eventSource.addEventListener("notification", function (event) {
+            const notification = document.createElement("div");
+            notification.className = "notification";
+            notification.textContent = event.data;
+            container.prepend(notification);
+        });
+
+        eventSource.onerror = function () {
+            console.error("EventSource failed.");
+        };
+    </script>
+  </body>
+</html>

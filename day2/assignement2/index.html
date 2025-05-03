@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Improved WebSocket Client</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 20px auto;
+        padding: 20px;
+      }
+      #status {
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 5px;
+        font-weight: bold;
+        text-align: center;
+      }
+      .connected {
+        background: #4caf50;
+        color: white;
+      }
+      .disconnected {
+        background: #f44336;
+        color: white;
+      }
+      .connecting {
+        background: #ffc107;
+        color: black;
+      }
+      #messages {
+        height: 300px;
+        border: 1px solid #ddd;
+        padding: 15px;
+        overflow-y: auto;
+        margin-bottom: 20px;
+        background: #f9f9f9;
+      }
+      button {
+        padding: 10px 15px;
+        margin-right: 10px;
+        background: #2196f3;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      button:disabled {
+        background: #cccccc;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>WebSocket Client</h1>
+    <div id="status" class="disconnected">Disconnected</div>
+    <div id="messages"></div>
+    <button id="connectBtn">Connect</button>
+    <button id="disconnectBtn" disabled>Disconnect</button>
+
+    <script>
+      const config = {
+        serverUrl: "wss://echo.websocket.org",
+        maxReconnectAttempts: 5,
+        initialReconnectDelay: 3000,
+        backoffFactor: 2,
+      };
+
+      let socket = null;
+      let reconnectAttempts = 0;
+      let reconnectTimer = null;
+      let isManualDisconnect = false;
+      const statusEl = document.getElementById("status");
+      const messagesEl = document.getElementById("messages");
+      const connectBtn = document.getElementById("connectBtn");
+      const disconnectBtn = document.getElementById("disconnectBtn");
+
+      function connect() {
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
+        updateStatus("Connecting...", "connecting");
+        logMessage(`Connecting to ${config.serverUrl}...`);
+
+        try {
+          socket = new WebSocket(config.serverUrl);
+
+          socket.onopen = () => {
+            reconnectAttempts = 0;
+            isManualDisconnect = false;
+            updateStatus("Connected", "connected");
+            logMessage("Connection established");
+            updateButtons(true);
+            socket.send(
+              "Client connected at " + new Date().toLocaleTimeString()
+            );
+          };
+          socket.onmessage = (event) => {
+            logMessage("Received: " + event.data);
+          };
+          socket.onclose = (event) => {
+            updateButtons(false);
+            const reason = getCloseReason(event.code);
+
+            if (isManualDisconnect) {
+              updateStatus("Disconnected", "disconnected");
+              logMessage(`Manually disconnected (${reason})`);
+            } else {
+              updateStatus("Disconnected", "disconnected");
+              logMessage(`Connection closed (${reason})`);
+              attemptReconnect();
+            }
+          };
+
+          socket.onerror = (error) => {
+            logMessage(`Error: ${error.message || "Unknown error occurred"}`);
+            // Detailed error information
+            if (socket.readyState === WebSocket.CLOSED) {
+              logMessage("Connection failed - server may not be available");
+            }
+          };
+        } catch (error) {
+          logMessage(`Connection error: ${error.message}`);
+          attemptReconnect();
+        }
+      }
+
+      function attemptReconnect() {
+        if (
+          reconnectAttempts >= config.maxReconnectAttempts ||
+          isManualDisconnect
+        ) {
+          logMessage("Maximum reconnection attempts reached");
+          return;
+        }
+
+        reconnectAttempts++;
+        const delay =
+          config.initialReconnectDelay *
+          Math.pow(config.backoffFactor, reconnectAttempts - 1);
+
+        logMessage(
+          `Attempting reconnect (${reconnectAttempts}/${
+            config.maxReconnectAttempts
+          }) in ${delay / 1000} seconds...`
+        );
+
+        reconnectTimer = setTimeout(() => {
+          if (!isManualDisconnect) {
+            connect();
+          }
+        }, delay);
+      }
+
+      function updateStatus(text, statusClass) {
+        statusEl.textContent = text;
+        statusEl.className = statusClass;
+      }
+
+      function logMessage(message) {
+        const msgEl = document.createElement("div");
+        msgEl.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        messagesEl.appendChild(msgEl);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      function updateButtons(isConnected) {
+        connectBtn.disabled = isConnected;
+        disconnectBtn.disabled = !isConnected;
+      }
+
+      function getCloseReason(code) {
+        const reasons = {
+          1000: "Normal closure",
+          1001: "Server going away",
+          1002: "Protocol error",
+          1003: "Unsupported data",
+          1005: "No status received",
+          1006: "Abnormal closure",
+          1007: "Invalid data",
+          1008: "Policy violation",
+          1009: "Message too big",
+          1010: "Missing extension",
+          1011: "Internal error",
+          1012: "Service restart",
+          1013: "Try again later",
+          1014: "Bad gateway",
+          1015: "TLS handshake failed",
+        };
+        return reasons[code] || `Unknown reason (code ${code})`;
+      }
+
+      connectBtn.addEventListener("click", () => {
+        if (!socket || socket.readyState === WebSocket.CLOSED) {
+          isManualDisconnect = false;
+          connect();
+        }
+      });
+
+      disconnectBtn.addEventListener("click", () => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          isManualDisconnect = true;
+          socket.close(1000, "Client disconnected");
+        }
+      });
+
+      connect();
+    </script>
+  </body>
+</html>
